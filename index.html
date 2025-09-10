@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Recipe Finder</title>
+  <style>
+    :root {
+      --accent: #00eeff;
+      --text: #ffffff;
+      --card: rgba(255,255,255,0.1);
+      --shadow: rgba(0,0,0,0.3);
+    }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      color: var(--text);
+      background: #1e1e2f;
+      transition: background 0.3s, color 0.3s;
+      position: relative;
+      min-height: 100vh;
+    }
+    .dark-mode {
+      background: #0d0d0d;
+      --text: #f4f4f4;
+      --card: rgba(255,255,255,0.06);
+    }
+    .bg-image {
+      position: fixed;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      filter: blur(20px) brightness(0.5);
+      z-index: -1;
+      transition: background-image 0.5s ease;
+    }
+    .toggle-btn {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 8px 14px;
+      background: rgba(0,0,0,0.5);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      z-index: 10;
+    }
+    header {
+      text-align: center;
+      padding: 20px;
+    }
+    .typing-text {
+      font-size: 20px;
+      font-weight: bold;
+      border-right: 3px solid #00eeff;
+      white-space: nowrap;
+      overflow: hidden;
+      animation: typing 3s steps(10) infinite, blink 0.5s step-end infinite alternate;
+    }
+    @keyframes typing {
+      0% { width: 0 }
+      50% { width: 100% }
+      100% { width: 0 }
+    }
+    @keyframes blink {
+      50% { border-color: transparent }
+    }
+    .container {
+      max-width: 700px;
+      margin: auto;
+      padding: 20px;
+      text-align: center;
+      position: relative;
+    }
+    input, select {
+      padding: 10px;
+      font-size: 16px;
+      border: 2px solid var(--accent);
+      border-radius: 5px;
+      background: rgba(255,255,255,0.1);
+      color: var(--text);
+      margin: 5px;
+    }
+    .glowing-button {
+      padding: 12px 24px;
+      background: transparent;
+      color: var(--accent);
+      border: 2px solid var(--accent);
+      border-radius: 5px;
+      font-weight: bold;
+      font-size: 16px;
+      cursor: pointer;
+      box-shadow: 0 0 5px var(--accent), 0 0 10px var(--accent);
+      transition: all 0.3s ease;
+      margin: 5px;
+    }
+    .glowing-button:hover {
+      background: var(--accent);
+      color: #000;
+      box-shadow: 0 0 10px var(--accent), 0 0 20px var(--accent);
+    }
+    .suggestions {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(580px, 70vw);
+      background: rgba(0,0,0,0.8);
+      border-radius: 6px;
+      max-height: 240px;
+      overflow-y: auto;
+      z-index: 10;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+      backdrop-filter: blur(6px);
+    }
+    .suggestion-item {
+      padding: 10px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .suggestion-item:hover {
+      background: rgba(0,238,255,0.18);
+    }
+    .recipe {
+      margin-top: 20px;
+      padding: 20px;
+      border-radius: 10px;
+      background: var(--card);
+      box-shadow: 0 0 15px var(--shadow);
+      text-align: left;
+    }
+    .recipe img {
+      max-width: 100%;
+      border-radius: 10px;
+      margin-bottom: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-image" id="bgImage"></div>
+  <button class="toggle-btn" onclick="toggleMode()">🌙 Dark Mode</button>
+  <header>
+    <div class="typing-text">Lets cook!!!</div>
+    <h1>Recipe Finder</h1>
+  </header>
+  <div class="container">
+    <input type="text" id="dishInput" placeholder="Enter dish name..." />
+    <button class="glowing-button" onclick="searchRecipe()">Search</button>
+    <button class="glowing-button" id="micBtn">🎤</button>
+    <select id="langSelect" class="glowing-button">
+      <option value="en-US">English</option>
+      <option value="hi-IN">Hindi</option>
+      <option value="es-ES">Spanish</option>
+      <option value="fr-FR">French</option>
+      <option value="zh-CN">Chinese</option>
+      <option value="ar-SA">Arabic</option>
+    </select>
+    <div class="suggestions" id="suggestions" hidden></div>
+    <div id="recipeResult"></div>
+  </div>
+
+  <script>
+    const bgImage = document.getElementById("bgImage");
+    const input = document.getElementById("dishInput");
+    const resultDiv = document.getElementById("recipeResult");
+    const suggestions = document.getElementById("suggestions");
+    let lastDisplayedRecipe = "";
+
+    function toggleMode() {
+      document.body.classList.toggle("dark-mode");
+      const btn = document.querySelector(".toggle-btn");
+      btn.textContent = document.body.classList.contains("dark-mode") ? "☀️ Light Mode" : "🌙 Dark Mode";
+    }
+
+    async function searchRecipe() {
+      const dish = input.value.trim();
+      if (!dish) {
+        resultDiv.innerHTML = `<p>Please enter a dish name.</p>`;
+        return;
+      }
+
+      const res = await fetch(`https://www.themealdb.com/api/json/v1/1/search.php?s=${dish}`);
+      const data = await res.json();
+
+      if (!data.meals) {
+        resultDiv.innerHTML = `<p>Recipe not found. Try another dish.</p>`;
+        return;
+      }
+
+      const meal = data.meals[0];
+      lastDisplayedRecipe = meal.strMeal;
+
+      const ingredients = [];
+      for (let i = 1; i <= 20; i++) {
+        if (meal[`strIngredient${i}`]) {
+          ingredients.push(`${meal[`strIngredient${i}`]} - ${meal[`strMeasure${i}`]}`);
+        }
+      }
+
+      const steps = meal.strInstructions
+        .split(/\r?\n+/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0)
+        .map(step => `<li>${step}</li>`)
+        .join("");
+
+      bgImage.style.backgroundImage = `url('${meal.strMealThumb}')`;
+
+      resultDiv.innerHTML = `
+        <div class="recipe">
+          <h2>${meal.strMeal}</h2>
+          <img src="${meal.strMealThumb}" alt="${meal.strMeal}" />
+          <h3>Ingredients:</h3>
+          <ul>${ingredients.map(i => `<li>${i}</li>`).join("")}</ul>
+          <h3>Cooking Process:</h3>
+          <ol>${steps}</ol>
+        </div>
+      `;
+
+      fetchSuggestions(dish);
+    }
+
+    // Voice Search
+    const micBtn = document.getElementById("micBtn");
+    const langSelect = document.getElementById("langSelect");
+
+    if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+
+      micBtn.addEventListener("click", () => {
+        recognition.lang = langSelect.value;
+        recognition.start();
+        micBtn.textContent = "🎙️ Listening...";
+      });
+
+      recognition
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        input.value = transcript;
+        micBtn.textContent = "🎤";
+        searchRecipe();
+      };
+
+      recognition.onerror = () => {
+        micBtn.textContent = "🎤";
+      };
+
+      recognition.onend = () => {
+        micBtn.textContent = "🎤";
+      };
+    } else {
+      micBtn.disabled = true;
+      micBtn.title = "Voice search not supported";
+    }
+
+    // Auto-suggestions while typing
+    let debounceTimer;
+    input.addEventListener("input", () => {
+      clearTimeout(debounceTimer);
+      const query = input.value.trim();
+      if (query.length < 2) {
+        suggestions.innerHTML = "";
+        suggestions.hidden = true;
+        return;
+      }
+      debounceTimer = setTimeout(() => fetchSuggestions(query), 300);
+    });
+
+    async function fetchSuggestions(query) {
+      try {
+        const res = await fetch(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        suggestions.innerHTML = "";
+        if (!data.meals) {
+          suggestions.hidden = true;
+          return;
+        }
+        data.meals
+          .filter(meal => meal.strMeal !== lastDisplayedRecipe) // exclude current recipe
+          .slice(0, 6)
+          .forEach(meal => {
+            const div = document.createElement("div");
+            div.className = "suggestion-item";
+            div.textContent = meal.strMeal;
+            div.onclick = () => {
+              input.value = meal.strMeal;
+              suggestions.hidden = true;
+              searchRecipe();
+            };
+            suggestions.appendChild(div);
+          });
+        suggestions.hidden = suggestions.innerHTML.trim() === "";
+      } catch (err) {
+        console.error("Suggestion error:", err);
+        suggestions.hidden = true;
+      }
+    }
+
+    // Hide suggestions when clicking outside
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".suggestions") && e.target !== input) {
+        suggestions.hidden = true;
+      }
+    });
+  </script>
+</body>
+</html>
